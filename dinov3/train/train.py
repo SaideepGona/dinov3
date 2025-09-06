@@ -34,7 +34,9 @@ from dinov3.data import (
     make_data_loader,
     make_dataset,
     CombinedDataLoader,
+    DataAugmentationSlideflow
 )
+
 from dinov3.logging import MetricLogger, setup_logging
 from dinov3.train.cosine_lr_scheduler import CosineScheduler, linear_warmup_cosine_decay
 from dinov3.train.multidist_meta_arch import MultiDistillationMetaArch
@@ -91,6 +93,12 @@ For python-based LazyConfig, use "path.key=value".
     parser.add_argument("--record_ref_losses", action="store_true", help="record reference losses")
     parser.add_argument("--ref_losses_path", default="", type=str)
     parser.add_argument("--multi-distillation", action="store_true", help="run multi-distillation")
+    parser.add_argument(
+        "--local-rank",
+        default=0,
+        type=int,
+        help="Variable for distributed computing."
+    )
 
     return parser
 
