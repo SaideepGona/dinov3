@@ -5,6 +5,9 @@
 
 import logging
 
+import torch
+from typing import Optional
+
 import numpy as np
 from torch import nn
 from torchvision import transforms
@@ -31,6 +34,7 @@ class DataAugmentationDINO(object):
         horizontal_flips=True,
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        convert_dtype=False,
     ):
         self.global_crops_scale = global_crops_scale
         self.local_crops_scale = local_crops_scale
@@ -140,12 +144,20 @@ class DataAugmentationDINO(object):
         local_transfo_extra = GaussianBlur(p=0.5)
 
         # normalization
-        self.normalize = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                make_normalize_transform(mean=mean, std=std),
-            ]
-        )
+        if convert_dtype:
+            self.normalize = transforms.Compose(
+                [
+                    transforms.ConvertImageDtype(torch.float32),
+                    make_normalize_transform(),
+                ]
+            )
+        else:
+            self.normalize = transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    make_normalize_transform(),
+                ]
+            )
 
         if self.share_color_jitter:
             self.color_jittering = color_jittering
@@ -223,3 +235,37 @@ class DataAugmentationDINO(object):
             output["offsets"] = ()
 
         return output
+
+# -----------------------------------------------------------------------------
+
+class RandomStainAugment:
+    """Transformation to apply random stain augmentation."""
+
+    def __init__(self, normalizer, p=0.5):
+        self.normalizer = normalizer
+        self.p = p
+
+    def __call__(self, img):
+        return torch.where(
+            torch.rand(1)[0] < self.p,
+            self.normalizer.torch_to_torch(img, augment=True),
+            img,
+        )
+
+
+class DataAugmentationSlideflow(DataAugmentationDINO):
+    """DINO data augmentation with random stain augmentation."""
+
+    def __init__(self, *args, normalizer: Optional[str] = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if normalizer is not None:
+            import slideflow as sf
+            normalizer = sf.norm.autoselect(normalizer, backend='torch')
+            logger.info("Set up stain augmentation with normalizer: {}".format(normalizer))
+            self.stain_augment = RandomStainAugment(normalizer)
+            self.local_transfo = transforms.Compose(
+                [
+                    self.stain_augment,
+                    self.local_transfo
+                ]
+            )
