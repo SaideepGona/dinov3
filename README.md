@@ -529,6 +529,8 @@ micromamba activate dinov3
 
 ### Slideflow
 ```
+conda env create -f conda.yaml
+conda activate dinov3
 conda install -c conda-forge swig
 pip install slideflow[torch]
 ```
