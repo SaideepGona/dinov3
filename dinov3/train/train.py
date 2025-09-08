@@ -318,6 +318,7 @@ def build_data_loader_from_cfg(
         dataset_str=dataset_path,
         transform=model.build_data_augmentation_dino(cfg),
         target_transform=lambda _: (),
+        slideflow_args=(None if 'slideflow' not in cfg.train else cfg.train.slideflow)
     )
 
     if isinstance(dataset, torch.utils.data.IterableDataset):
