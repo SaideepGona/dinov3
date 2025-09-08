@@ -527,6 +527,12 @@ micromamba env create -f conda.yaml
 micromamba activate dinov3
 ```
 
+### Slideflow
+```
+conda install -c conda-forge swig
+pip install slideflow[torch]
+```
+
 ## Getting started
 
 Several notebooks are provided to get started applying DINOv3:
