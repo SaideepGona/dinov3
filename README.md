@@ -613,6 +613,48 @@ Please adapt the [dataset class](dinov3/data/datasets/image_net_22k.py) to match
 
 ## Training
 
+### Slideflow
+
+Example sbatch submission script on SLURM cluster
+
+```
+#!/bin/bash
+#SBATCH --job-name=dinov3_training
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2   # We are launching 2 processes
+#SBATCH --cpus-per-task=8     # Each process needs its own CPUs
+#SBATCH --gres=gpu:2          # Request 2 GPUs for the node
+#SBATCH --mem=256GB
+#SBATCH --time=1:00:00
+#SBATCH --partition=gpudev
+#SBATCH --output=dinov3_%j.out
+#SBATCH --error=dinov3_%j.err
+
+module load miniconda3/24.9.2
+module load gcc/12.1.0
+module load cuda/11.8
+
+# Activate your environment
+source /apps/software/gcc-12.1.0/miniconda3/24.9.2/etc/profile.d/conda.sh
+conda activate dinov3
+
+# Set environment variables for multi-GPU distributed training
+export PYTHONUNBUFFERED=1
+export NCCL_PROTO=simple
+export NCCL_SOCKET_IFNAME=ib0
+export WORLD_SIZE=$SLURM_NTASKS
+
+# Set MASTER_ADDR to the first node in the SLURM job allocation
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_PORT=$(shuf -i 20000-65000 -n 1)
+
+export PYTHONPATH=/gpfs/data/pearson-lab/PERSONAL/saideep/projects/dinov3:$PYTHONPATH
+
+srun /gpfs/data/pearson-lab/PERSONAL/saideep/.conda/envs/dinov3/bin/python -m dinov3.train.train \
+    --config-file /gpfs/data/pearson-lab/PROJECTS/UCH_CHEVRIER_WHOLEMOUSE/dinov3_config.yaml \
+    --output-dir /gpfs/data/pearson-lab/PROJECTS/UCH_CHEVRIER_WHOLEMOUSE/dinov3_output
+```
+
 ### Fast setup: training DINOv3 ViT-L/16 on ImageNet-1k
 
 Run DINOv3 pre-training on 4 H100-80GB nodes (32 GPUs) in a SLURM cluster environment with submitit:
