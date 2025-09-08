@@ -14,7 +14,7 @@ from torch import Tensor, nn
 import dinov3.distributed as distributed
 from dinov3.checkpointer import init_fsdp_model_from_checkpoint
 from dinov3.configs import get_default_config
-from dinov3.data import DataAugmentationDINO
+from dinov3.data import DataAugmentationDINO, DataAugmentationSlideflow
 from dinov3.fsdp.ac_compile_parallelize import ac_compile_parallelize
 from dinov3.layers.dino_head import DINOHead
 from dinov3.loss import DINOLoss, GramLoss, KoLeoLoss, KoLeoLossDistributed, iBOTPatchLoss
@@ -740,20 +740,36 @@ class SSLMetaArch(nn.Module):
             torch._foreach_add_(gramteacher_param_list, teacher_param_list, alpha=1 - m)
 
     def build_data_augmentation_dino(self, cfg):
-        return DataAugmentationDINO(
-            cfg.crops.global_crops_scale,
-            cfg.crops.local_crops_scale,
-            cfg.crops.local_crops_number,
+        is_slideflow = 'slideflow' in cfg.train
+        aug_kw = dict(
             global_crops_size=cfg.crops.global_crops_size,
             local_crops_size=cfg.crops.local_crops_size,
-            gram_teacher_crops_size=cfg.crops.gram_teacher_crops_size,
-            gram_teacher_no_distortions=cfg.crops.gram_teacher_no_distortions,
-            local_crops_subset_of_global_crops=cfg.crops.localcrops_subset_of_globalcrops,
-            share_color_jitter=cfg.crops.share_color_jitter,
-            horizontal_flips=cfg.crops.horizontal_flips,
-            mean=cfg.crops.rgb_mean,
-            std=cfg.crops.rgb_std,
+            convert_dtype=is_slideflow,
         )
+        if is_slideflow:
+            aug_class = DataAugmentationSlideflow
+            if 'normalizer' in cfg.train.slideflow and cfg.train.slideflow.normalizer:
+                aug_kw['normalizer'] = cfg.train.slideflow.normalizer
+                logger.info("Using slideflow data augmentation with normalizer: {}".format(
+                    aug_kw['normalizer']
+                ))
+        else:
+            aug_class = DataAugmentationDINO
+    
+        data_transform = aug_class(
+                cfg.crops.global_crops_scale,
+                cfg.crops.local_crops_scale,
+                cfg.crops.local_crops_number,
+                gram_teacher_crops_size=cfg.crops.gram_teacher_crops_size,
+                gram_teacher_no_distortions=cfg.crops.gram_teacher_no_distortions,
+                local_crops_subset_of_global_crops=cfg.crops.localcrops_subset_of_globalcrops,
+                share_color_jitter=cfg.crops.share_color_jitter,
+                horizontal_flips=cfg.crops.horizontal_flips,
+                mean=cfg.crops.rgb_mean,
+                std=cfg.crops.rgb_std,
+                **aug_kw
+        )
+        return data_transform
 
     def get_maybe_fused_params_for_submodel(self, m: nn.Module):
         params_groups = get_params_groups_with_decay_fsdp(
